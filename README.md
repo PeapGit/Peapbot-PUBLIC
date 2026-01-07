@@ -14,10 +14,10 @@ Jede Sprache befindet sich in einem eigenen Ordner mit den Bezeichnungen English
 
 Um zu beginnen, lege deine token.txt in denselben Ordner wie entweder main.py (für Guilds) oder main2.py (für Apps).
 
-# Hindi (हिंदी)
+# Thai (ไทย)
 
-यह बॉट मेरा व्यक्तिगत बॉट है, जिसका उपयोग मैं दोस्तों के साथ काम करने और ऐसी ही अन्य चीज़ों के लिए करता हूँ।
-डॉक्यूमेंटेशन को तीन अलग-अलग भाषाओं में अनुवादित किया जाएगा।
-प्रत्येक भाषा के लिए एक अलग फ़ोल्डर होगा, जिनके नाम English, German, और Hindi होंगे।
+นี่คือคำแปลภาษาไทย:
 
-शुरू करने के लिए, अपनी token.txt फ़ाइल को उसी फ़ोल्डर में रखें जहाँ main.py (guilds के लिए) या main2.py (apps के लिए) मौजूद हो।
+บอทตัวนี้เป็นบอทส่วนตัวของฉัน สำหรับใช้ทำกิจกรรมต่าง ๆ กับเพื่อน ๆ และเรื่องอื่น ๆ ที่คล้ายกัน เอกสารประกอบจะถูกแปลเป็น 3 ภาษาที่แยกจากกัน โดยแต่ละภาษาจะอยู่ในโฟลเดอร์แยกกันชื่อว่า English, German และ Hindu
+
+ในการเริ่มต้นใช้งาน ให้นำไฟล์ token.txt ไปไว้ในโฟลเดอร์เดียวกับ main.py (สำหรับ guilds) หรือ main2.py (สำหรับ apps)
