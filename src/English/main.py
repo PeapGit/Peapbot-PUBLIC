@@ -9,22 +9,22 @@ from typing import Optional, List, Dict
 import cv2
 import numpy
 
-intents = discord.Intents.default()
 _base_dir = os.path.dirname(__file__)
 _token_file = os.path.join(_base_dir, "token.txt")
 TOKEN = None
+intents = discord.Intents.default()
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 with open(_token_file, "r", encoding="utf-8") as f:
     TOKEN = f.read().strip()
     if not TOKEN:
-        TOKEN = None
+        print("no token")
+        exit(1)
 
-if TOKEN is None:
-    print("no token")
-    exit(1)
-
-GUILD_ID = 1276099166522572832
+# This can only run on my server and fairview linux club server PERIOD
+# For security reasons............
+# GUILD_ID = [1276099166522572832, 1157073803382378597] when fairview server is added this will be uncommented
+GUILD_ID = [1276099166522572832]
 _badapple_path = os.path.join(_base_dir, "badapple.mp4")
 _badapple_tasks: Dict[int, tuple] = {}
 _badapple_ascii_chars = " .:-=+*#%@"
@@ -32,25 +32,33 @@ _badapple_width = 49
 _badapple_height = 20
 _badapple_fps = 30
 _badapple_buffer_seconds = 5
-_badapple_send_interval = 5.0
+_badapple_send_interval = 5.0  # seconds between edits
 _badapple_max_queue = _badapple_fps * _badapple_buffer_seconds
 
+intents = discord.Intents.default()
+
+# Some may ask why this is a function, I say im not gonna type discord.object... every fucking time
+def guildo():
+    return [discord.Object(id=g) for g in GUILD_ID]
 
 @bot.event
 async def on_ready():
     # I HATE ERROR HANDLING
     try:
-        guild_obj = discord.Object(id=GUILD_ID)
-        synced = await bot.tree.sync(guild=guild_obj)
-        print(f"Synced {len(synced)}")
-        print(f"Logged in as {bot.user} (ID: {bot.user.id})")
+        total = 0
+        for guild_obj in guildo():
+            synced = await bot.tree.sync(guild=guild_obj)
+            total += len(synced)
+
+        print(f"Total commands synced: {total}")
+        print(f"Logged in as {bot.user}, ID: {bot.user.id}")
     except Exception as e:
         print(f"Sync failed: {e}")
 
 @bot.tree.command(
     name="peap",
     description="Peaper",
-    guild=discord.Object(id=GUILD_ID)
+    guilds=guildo()
 )
 async def peap(interaction: discord.Interaction):
     await interaction.response.send_message("peap")
@@ -61,7 +69,7 @@ _tilley_dir = os.path.join(_base_dir, "tilley")
 @bot.tree.command(
     name="tilley",
     description="Send a random Tilley image",
-    guild=discord.Object(id=GUILD_ID)
+    guilds=guildo()
 )
 async def tilley(interaction: discord.Interaction):
     # All file types and file organization stuff
@@ -136,7 +144,7 @@ async def _badapple_sender(msg: discord.Message, queue: asyncio.Queue, stop_even
 @bot.tree.command(
     name="badapple",
     description="Play Bad Apple!!",
-    guild=discord.Object(id=GUILD_ID)
+    guilds=guildo()
 )
 async def badapple(interaction: discord.Interaction):
     channel = interaction.channel
@@ -157,11 +165,10 @@ async def badapple(interaction: discord.Interaction):
     playback_message = await interaction.followup.send(f"```{first_frame}```")
     _badapple_tasks[channel.id] = (stop_event, producer, asyncio.create_task(_badapple_sender(playback_message, queue, stop_event)))
 
-
 @bot.tree.command(
     name="stopapple",
     description="Stop Bad Applem printing",
-    guild=discord.Object(id=GUILD_ID)
+    guilds=guildo()
 )
 async def stopapple(interaction: discord.Interaction):
     channel = interaction.channel
@@ -181,6 +188,25 @@ async def stopapple(interaction: discord.Interaction):
     _badapple_tasks.pop(channel.id, None)
     # Baddy appley has been stoopyed in this channely
     await interaction.response.send_message("Bad apple == stopped in channel", ephemeral=True)
+
+@bot.tree.command(
+    name="quote",
+    description="Send a random text quote.",
+    guilds=guildo()
+)
+async def quote(interaction: discord.Interaction):
+    with open('quotes.txt', "r", encoding="utf-8") as quotes_file:
+        quotes = [line.strip() for line in quotes_file if line.strip()]
+    await interaction.response.send_message(random.choice(quotes))
+
+@bot.tree.context_menu(name="Add a quote", guilds=guildo())
+async def add_quote(interaction: discord.Interaction, message: discord.Message):
+    quote_text = message.content.strip()
+
+    with open('quotes.txt', "a", encoding="utf-8") as quotes_file:
+        quotes_file.write("\n" + quote_text)
+
+    await interaction.response.send_message("Quote noted", ephemeral=True)
 
 if __name__ == "__main__":
     bot.run(TOKEN)
