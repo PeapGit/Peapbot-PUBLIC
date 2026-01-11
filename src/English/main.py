@@ -8,12 +8,15 @@ import base64
 from typing import Optional, List, Dict
 import cv2
 import numpy
+import datetime, pytz
+import csv
 
 _base_dir = os.path.dirname(__file__)
 _token_file = os.path.join(_base_dir, "token.txt")
 TOKEN = None
 intents = discord.Intents.default()
 bot = commands.Bot(command_prefix="!", intents=intents)
+_quotes_csv_path = os.path.join(_base_dir, "quotes.csv")
 
 with open(_token_file, "r", encoding="utf-8") as f:
     TOKEN = f.read().strip()
@@ -34,8 +37,6 @@ _badapple_fps = 30
 _badapple_buffer_seconds = 5
 _badapple_send_interval = 5.0  # seconds between edits
 _badapple_max_queue = _badapple_fps * _badapple_buffer_seconds
-
-intents = discord.Intents.default()
 
 # Some may ask why this is a function, I say im not gonna type discord.object... every fucking time
 def guildo():
@@ -167,7 +168,7 @@ async def badapple(interaction: discord.Interaction):
 
 @bot.tree.command(
     name="stopapple",
-    description="Stop Bad Applem printing",
+    description="Stop Bad Apple printing",
     guilds=guildo()
 )
 async def stopapple(interaction: discord.Interaction):
@@ -194,19 +195,126 @@ async def stopapple(interaction: discord.Interaction):
     description="Send a random text quote.",
     guilds=guildo()
 )
-async def quote(interaction: discord.Interaction):
-    with open('quotes.txt', "r", encoding="utf-8") as quotes_file:
-        quotes = [line.strip() for line in quotes_file if line.strip()]
-    await interaction.response.send_message(random.choice(quotes))
+@app_commands.describe(
+    user="User to get the quote from (optional)"
+)
+
+async def quote(
+    interaction: discord.Interaction,
+    user: Optional[discord.Member] = None,
+    include_id: Optional[bool] = False,
+):
+    rows = []
+    with open(_quotes_csv_path, "r", encoding="utf-8", newline="") as f:
+        reader = csv.reader(f)
+        for r in reader:
+            if len(r) < 4:
+                continue
+            quote_text, author_name, unix_ts_str, snowflake = (
+                r[0].strip(),
+                r[1].strip(),
+                r[2].strip(),
+                r[3].strip(),
+            )
+            if not quote_text:
+                continue
+            rows.append((quote_text, author_name, unix_ts_str, snowflake))
+
+    if user:
+        target = user.display_name
+        rows = [r for r in rows if r[1] == target]
+
+    if not rows:
+        await interaction.response.send_message("Error code YOU-ARE-FUCKED, aka your fucked", ephemeral=True)
+        return
+
+    quote_text, author_name, unix_ts_str, snowflake = random.choice(rows)
+
+    try:
+        unix_ts = int(float(unix_ts_str))
+        dt = datetime.datetime.fromtimestamp(unix_ts, tz=datetime.timezone.utc)
+        date_str = dt.strftime("%Y-%m-%d %H:%M UTC")
+    except Exception:
+        date_str = unix_ts_str
+
+    msg = f"{quote_text} \\- {author_name} said on {date_str}"
+    if include_id:
+        msg += f" (snowflake: {snowflake})"
+
+
+    await interaction.response.send_message(msg)
 
 @bot.tree.context_menu(name="Add a quote", guilds=guildo())
 async def add_quote(interaction: discord.Interaction, message: discord.Message):
-    quote_text = message.content.strip()
 
-    with open('quotes.txt', "a", encoding="utf-8") as quotes_file:
-        quotes_file.write("\n" + quote_text)
+
+    with open(_quotes_csv_path, "a", encoding="utf-8", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow([message.content.strip(), message.author.display_name, message.created_at.replace(tzinfo=datetime.timezone.utc).timestamp(), message.id])
 
     await interaction.response.send_message("Quote noted", ephemeral=True)
+
+@bot.tree.command(name="add_quote_poll", guilds=guildo())
+async def add_quote_poll(interaction: discord.Interaction, message: str, author: discord.Member):
+    quote_text = message.strip()
+
+    await interaction.response.send_message(
+        f"Did the quote actually happen?\n\"{quote_text}\"\n- {author.display_name}\n Needs 3 ✅ reactions (4 below on the thing) to confirm",
+        ephemeral=False,
+    )
+    poll_message = await interaction.original_response()
+
+    await poll_message.add_reaction("✅")
+
+    needed = 3
+    timeout_seconds = 86400
+
+    yes_voters: set[int] = set()
+
+    def check(payload: discord.RawReactionActionEvent) -> bool:
+        if payload.message_id != poll_message.id:
+            return False
+        return str(payload.emoji) == "✅"
+
+    async def refresh_yes_voters() -> None:
+        yes_voters.clear()
+        poll_message_fresh = await poll_message.channel.fetch_message(poll_message.id)
+        for reaction in poll_message_fresh.reactions:
+            if str(reaction.emoji) != "✅":
+                continue
+            async for user in reaction.users():
+                if not user.bot:
+                    yes_voters.add(user.id)
+
+    deadline = asyncio.get_running_loop().time() + timeout_seconds
+
+    try:
+        while True:
+            remaining = deadline - asyncio.get_running_loop().time()
+            if remaining <= 0:
+                raise asyncio.TimeoutError
+
+            await bot.wait_for("raw_reaction_add", timeout=remaining, check=check)
+            await refresh_yes_voters()
+
+            if len(yes_voters) >= needed:
+                with open(_quotes_csv_path, "a", encoding="utf-8", newline="") as f:
+                    writer = csv.writer(f)
+                    writer.writerow(
+                        [
+                            quote_text,
+                            author.display_name,
+                            datetime.datetime.now(tz=datetime.timezone.utc).timestamp(),
+                            poll_message.id,
+                        ]
+                    )
+                await poll_message.edit(content="Quote added successfully, 3 ✅ reached")
+                break
+
+    except asyncio.TimeoutError:
+        await poll_message.edit(
+            content=f"Poll timed out, quote not added (✅ {len(yes_voters)}/{needed})"
+        )
 
 if __name__ == "__main__":
     bot.run(TOKEN)
